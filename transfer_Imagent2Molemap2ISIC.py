@@ -21,18 +21,23 @@ plt.ion()   # interactive mode
 # Training Flags #
 #####################
 batch_sz = 32
-num_epoch = 10
-init_learning_rate = 0.0002
+num_epoch = 15
+init_learning_rate = 0.0001
 learning_rate_decay_factor = 0.5
 num_epochs_decay = 2
 
-#####################
-# data path #
-#####################
-Molemap_dir ='MoleMap/classes'
+####################################################################
+## data preprocessing and loading
 ####################################################################
 mean = np.array([0.485, 0.456, 0.406])
 std = np.array([0.229, 0.224, 0.225])
+
+#####################
+## MoleMap
+#####################
+Molemap_dir ='MoleMap/classes' # data path #
+# Data augmentation and normalization for training
+# Just normalization for validation
 data_transforms_m = {
     'train': transforms.Compose([
         transforms.RandomResizedCrop(224),
@@ -41,6 +46,7 @@ data_transforms_m = {
         transforms.Normalize(mean, std)
     ]),
     'val': transforms.Compose([
+        transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
@@ -56,30 +62,11 @@ dataloaders_m = {x: torch.utils.data.DataLoader(image_datasets_m[x], batch_size=
 dataset_sizes_m = {x: len(image_datasets_m[x]) for x in ['train', 'val']}
 class_names_m = image_datasets_m['train'].classes
 
-data_dir = 'Data/sub'
 
-#####################################################################
-# Calculate training set mean and standard deviation
-#  train_dir=os.path.join(data_dir,'train')
-# class_names = os.listdir(train_dir)
-# img_mean = []
-# for i in range(len(class_names)):
-#     img_dir = os.path.join(train_dir,class_names[i])
-#     for j in os.listdir(img_dir):
-#         img_name = os.path.join(img_dir,j)
-#         img = load_image(img_name)
-#         img_mean.append(np.mean(np.mean(img,axis=0),axis=0))
-#
-# img_mean = np.asarray(img_mean)
-# mean = img_mean.mean(axis=0)
-# std = img_mean.std(axis=0)
-
-mean = np.array([0.485, 0.456, 0.406])
-std = np.array([0.229, 0.224, 0.225])
-
-######################################################################
-# Load Data
-
+#####################
+## ISIC
+#####################
+data_dir = 'Data/sub'  # data path #
 # Data augmentation and normalization for training
 # Just normalization for validation
 data_transforms = {
@@ -90,12 +77,12 @@ data_transforms = {
         transforms.Normalize(mean, std)
     ]),
     'val': transforms.Compose([
+        transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ]),
 }
-
 
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                           data_transforms[x])
@@ -150,7 +137,7 @@ def imshow(inp, title=None):
 # ``torch.optim.lr_scheduler``.
 
 
-def train_model(model, criterion, optimizer, scheduler,dataloaders, num_epochs=num_epoch):
+def train_model(model, criterion, optimizer, scheduler,dataloaders, data_sizes, num_epochs=num_epoch):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -195,8 +182,8 @@ def train_model(model, criterion, optimizer, scheduler,dataloaders, num_epochs=n
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
 
-            epoch_loss = running_loss / dataset_sizes[phase]
-            epoch_acc = running_corrects.double() / dataset_sizes[phase]
+            epoch_loss = running_loss / data_sizes[phase]
+            epoch_acc = running_corrects.double() / data_sizes[phase]
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
@@ -252,18 +239,14 @@ def visualize_model(model, num_images=6):
         model.train(mode=was_training)
 
 ######################################################################
-# Finetuning the convnet
+# Finetuning the convnet transfer from resnet to MoleMap
 # ----------------------
 #
 # Load a pretrained model and reset final fully connected layer.
-#
-
 model_ft = models.resnet152(pretrained=True)
 num_ftrs = model_ft.fc.in_features
 model_ft.fc = nn.Linear(num_ftrs, len(class_names_m))
-
 model_ft = model_ft.to(device)
-
 criterion = nn.CrossEntropyLoss()
 model_ft.parameters()
 # Observe that all parameters are being optimized
@@ -274,16 +257,14 @@ optimizer_ft = torch.optim.Adam(model_ft.parameters(), lr=init_learning_rate)
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=num_epochs_decay, gamma=learning_rate_decay_factor)
 
 ######################################################################
-# Train and evaluate
-# ^^^^^^^^^^^^^^^^^^
-#
-# It should take around 15-25 min on CPU. On GPU though, it takes less than a
-# minute.
-#
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders_m,
+# Train and evaluate and save model
+model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders_m,dataset_sizes_m,
                        num_epochs=num_epoch)
 torch.save(model_ft.state_dict(), 'Molemap.ckpt')
 
+######################################################################
+# Finetuning the convnet transfer from MoleMap to ISIC
+# ----------------------
 model_ft.fc = nn.Linear(num_ftrs, len(class_names))
 model_ft = model_ft.to(device)
 model_ft.parameters()
@@ -292,14 +273,12 @@ optimizer_ft = torch.optim.Adam(model_ft.parameters(), lr=init_learning_rate)
 
 # Decay LR by a factor of 0.1 every 7 epochs
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=num_epochs_decay, gamma=learning_rate_decay_factor)
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders,
+model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders,dataset_sizes,
                        num_epochs=num_epoch)
 
 ######################################################################
 #
 
 visualize_model(model_ft)
-
-
 plt.ioff()
 plt.show()

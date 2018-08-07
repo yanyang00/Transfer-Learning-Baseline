@@ -30,14 +30,10 @@ num_epochs_decay = 2
 data_dir = 'Data/sub'
 train_dir=os.path.join(data_dir,'train')
 
-#####################################################################
-
-mean = np.array([0.485, 0.456, 0.406])
-std = np.array([0.229, 0.224, 0.225])
-
 ######################################################################
 # Load Data
-
+mean = np.array([0.485, 0.456, 0.406])
+std = np.array([0.229, 0.224, 0.225])
 # Data augmentation and normalization for training
 # Just normalization for validation
 data_transforms = {
@@ -54,7 +50,6 @@ data_transforms = {
         transforms.Normalize(mean, std)
     ]),
 }
-
 
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                           data_transforms[x])
@@ -235,75 +230,17 @@ model_ft.parameters()
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.0001, momentum=0.8)
 optimizer_ft = torch.optim.Adam(model_ft.parameters(), lr=init_learning_rate)
 
-# Decay LR by a factor of 0.1 every 7 epochs
+# Decay LR by a factor of learning_rate_decay_factor every num_epochs_decay epochs
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=num_epochs_decay, gamma=learning_rate_decay_factor)
 
 
 ######################################################################
 # Train and evaluate
 # ^^^^^^^^^^^^^^^^^^
-#
-# It should take around 15-25 min on CPU. On GPU though, it takes less than a
-# minute.
-#
-
 model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=num_epoch)
-
 ######################################################################
 #
-
 visualize_model(model_ft)
-
-#
-# ######################################################################
-# # ConvNet as fixed feature extractor
-# # ----------------------------------
-# #
-# # Here, we need to freeze all the network except the final layer. We need
-# # to set ``requires_grad == False`` to freeze the parameters so that the
-# # gradients are not computed in ``backward()``.
-# #
-# # You can read more about this in the documentation
-# # `here <http://pytorch.org/docs/notes/autograd.html#excluding-subgraphs-from-backward>`__.
-# #
-#
-# model_conv = torchvision.models.resnet152(pretrained=True)
-# for param in model_conv.parameters():
-#     param.requires_grad = False
-#
-# # Parameters of newly constructed modules have requires_grad=True by default
-# num_ftrs = model_conv.fc.in_features
-# model_conv.fc = nn.Linear(num_ftrs, 7)
-#
-# model_conv = model_conv.to(device)
-#
-# criterion = nn.CrossEntropyLoss()
-#
-# # Observe that only parameters of final layer are being optimized as
-# # opoosed to before.
-# optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
-#
-# # Decay LR by a factor of 0.1 every 7 epochs
-# exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
-#
-#
-# ######################################################################
-# # Train and evaluate
-# # ^^^^^^^^^^^^^^^^^^
-# #
-# # On CPU this will take about half the time compared to previous scenario.
-# # This is expected as gradients don't need to be computed for most of the
-# # network. However, forward does need to be computed.
-# #
-#
-# model_conv = train_model(model_conv, criterion, optimizer_conv,
-#                          exp_lr_scheduler, num_epochs=25)
-#
-# ######################################################################
-# #
-#
-# visualize_model(model_conv)
-#
-# plt.ioff()
-# plt.show()
+plt.ioff()
+plt.show()
