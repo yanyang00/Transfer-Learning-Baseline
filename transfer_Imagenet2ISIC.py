@@ -13,33 +13,24 @@ import os
 import copy
 from PIL import Image
 torch.backends.cudnn.benchmark=True
-
-def load_image( infilename ) :
-    img = Image.open( infilename )
-    img.load()
-    data = np.asarray( img, dtype="int32" )
-    return data
 plt.ion()   # interactive mode
 
+#####################
+# Training Flags #
+#####################
+batch_sz = 32
+num_epoch = 10
+init_learning_rate = 0.0002
+learning_rate_decay_factor = 0.5
+num_epochs_decay = 2
+
+#####################
+# data path #
+#####################
 data_dir = 'Data/sub'
 train_dir=os.path.join(data_dir,'train')
-#####################################################################
-# Calculate training set mean and standard deviation
-# class_names = os.listdir(train_dir)
-# img_mean = []
-# for i in range(len(class_names)):
-#     img_dir = os.path.join(train_dir,class_names[i])
-#     for j in os.listdir(img_dir):
-#         img_name = os.path.join(img_dir,j)
-#         img = load_image(img_name)
-#         img_mean.append(np.mean(np.mean(img,axis=0),axis=0))
-#
-# img_mean = np.asarray(img_mean)
-# mean = img_mean.mean(axis=0)
-# std = img_mean.std(axis=0)
 
-# mean = np.array([194.87944025/256,139.32217722/256,145.54994323/256])
-# std = np.array([25.1488936/256,22.0024031/256,24.38337571/256])
+#####################################################################
 
 mean = np.array([0.485, 0.456, 0.406])
 std = np.array([0.229, 0.224, 0.225])
@@ -51,7 +42,6 @@ std = np.array([0.229, 0.224, 0.225])
 # Just normalization for validation
 data_transforms = {
     'train': transforms.Compose([
-	    # transforms.Resize(256),
         transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -69,7 +59,7 @@ data_transforms = {
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                           data_transforms[x])
                   for x in ['train', 'val']}
-dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
+dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sz,
                                              shuffle=True, num_workers=4)
               for x in ['train', 'val']}
 dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
@@ -119,7 +109,7 @@ imshow(out, title=[class_names[x] for x in classes])
 # ``torch.optim.lr_scheduler``.
 
 
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(model, criterion, optimizer, scheduler, num_epochs=num_epoch):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -233,19 +223,21 @@ model_ft.fc = nn.Linear(num_ftrs, 7)
 
 model_ft = model_ft.to(device)
 
-class_nums = []
-for i in range(len(class_names)):
-    class_dir = os.path.join(train_dir,class_names[i])
-    class_nums.append(len(os.listdir(class_dir)))
-cls_weights = [x/sum(class_nums) for x in class_nums]
+# class_nums = []
+# for i in range(len(class_names)):
+#     class_dir = os.path.join(train_dir,class_names[i])
+#     class_nums.append(len(os.listdir(class_dir)))
+# cls_weights = [x/sum(class_nums) for x in class_nums]
 
-criterion = nn.CrossEntropyLoss(weight=torch.cuda.FloatTensor(cls_weights))
+criterion = nn.CrossEntropyLoss()
 model_ft.parameters()
 # Observe that all parameters are being optimized
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.8)
+# optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.0001, momentum=0.8)
+optimizer_ft = torch.optim.Adam(model_ft.parameters(), lr=init_learning_rate)
 
 # Decay LR by a factor of 0.1 every 7 epochs
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=num_epochs_decay, gamma=learning_rate_decay_factor)
+
 
 ######################################################################
 # Train and evaluate
@@ -256,7 +248,7 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 #
 
 model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                       num_epochs=25)
+                       num_epochs=num_epoch)
 
 ######################################################################
 #
