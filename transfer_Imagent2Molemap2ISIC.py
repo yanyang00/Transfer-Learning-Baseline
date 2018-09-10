@@ -35,7 +35,8 @@ std = np.array([0.229, 0.224, 0.225])
 #####################
 ## MoleMap
 #####################
-Molemap_dir ='MoleMap/classes' # data path #
+# Molemap_dir ='MoleMap/classes' # data path #
+Molemap_dir ='Data/cycleGAN_data/MoleMapFalseB2000_N_ISIC_Train'
 # Data augmentation and normalization for training
 # Just normalization for validation
 data_transforms_m = {
@@ -66,7 +67,7 @@ class_names_m = image_datasets_m['train'].classes
 #####################
 ## ISIC
 #####################
-data_dir = 'Data/sub'  # data path #
+data_dir = 'Data/cycleGAN_data/2000Balanced'  # data path #
 # Data augmentation and normalization for training
 # Just normalization for validation
 data_transforms = {
@@ -95,46 +96,10 @@ class_names = image_datasets['train'].classes
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-######################################################################
-# Visualize a few images
-# ^^^^^^^^^^^^^^^^^^^^^^
-# Let's visualize a few training images so as to understand the data
-# augmentations.
-
-def imshow(inp, title=None):
-    """Imshow for Tensor."""
-    inp = inp.numpy().transpose((1, 2, 0))
-    # mean = np.array([0.485, 0.456, 0.406])
-    # std = np.array([0.229, 0.224, 0.225])
-    inp = std * inp + mean
-    inp = np.clip(inp, 0, 1)
-    plt.imshow(inp)
-    if title is not None:
-        plt.title(title)
-    plt.pause(0.001)  # pause a bit so that plots are updated
-
-
-# # Get a batch of training data
-# inputs, classes = next(iter(dataloaders['train']))
-#
-# # Make a grid from batch
-# out = torchvision.utils.make_grid(inputs)
-#
-# imshow(out, title=[class_names[x] for x in classes])
-
 
 ######################################################################
 # Training the model
 # ------------------
-#
-# Now, let's write a general function to train a model. Here, we will
-# illustrate:
-#
-# -  Scheduling the learning rate
-# -  Saving the best model
-#
-# In the following, parameter ``scheduler`` is an LR scheduler object from
-# ``torch.optim.lr_scheduler``.
 
 
 def train_model(model, criterion, optimizer, scheduler,dataloaders, data_sizes, num_epochs=num_epoch):
@@ -142,6 +107,10 @@ def train_model(model, criterion, optimizer, scheduler,dataloaders, data_sizes, 
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
+    loss_train=[]
+    acc_train=[]
+    loss_val=[]
+    acc_val=[]
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -187,6 +156,12 @@ def train_model(model, criterion, optimizer, scheduler,dataloaders, data_sizes, 
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
+            if phase == 'train':
+                loss_train.append(epoch_loss)
+                acc_train.append(epoch_acc)
+            if phase == 'val':
+                loss_val.append(epoch_loss)
+                acc_val.append(epoch_acc)
 
             # deep copy the model
             if phase == 'val' and epoch_acc > best_acc:
@@ -202,7 +177,9 @@ def train_model(model, criterion, optimizer, scheduler,dataloaders, data_sizes, 
 
     # load best model weights
     model.load_state_dict(best_model_wts)
-    return model
+    result=[loss_train,acc_train,loss_val,acc_val]
+
+    return model,result,time_elapsed
 
 
 ######################################################################
@@ -258,10 +235,11 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=num_epochs_decay,
 
 ######################################################################
 # Train and evaluate and save model
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders_m,dataset_sizes_m,
+model_ft,result,time_elapsed = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders_m,dataset_sizes_m,
                        num_epochs=num_epoch)
 torch.save(model_ft.state_dict(), 'Molemap.ckpt')
-
+print(result)
+print(time_elapsed)
 ######################################################################
 # Finetuning the convnet transfer from MoleMap to ISIC
 # ----------------------
@@ -273,12 +251,10 @@ optimizer_ft = torch.optim.Adam(model_ft.parameters(), lr=init_learning_rate)
 
 # Decay LR by a factor of 0.1 every 7 epochs
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=num_epochs_decay, gamma=learning_rate_decay_factor)
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders,dataset_sizes,
+model_ft,result,time_elapsed = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler, dataloaders,dataset_sizes,
                        num_epochs=num_epoch)
-
+print(result)
+print(time_elapsed)
 ######################################################################
-#
 
-visualize_model(model_ft)
-plt.ioff()
-plt.show()
+
